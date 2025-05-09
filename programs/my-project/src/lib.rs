@@ -63,9 +63,11 @@ pub mod bonding_curve_new {
         );
         system_program::transfer(transfer_ctx, cost)?;
 
-        // Mint tokens to buyer
+        // Mint tokens to buyer using the token mint in the seeds
+        let token_mint_key = ctx.accounts.token_mint.key();
         let seeds = &[
             b"bonding_curve".as_ref(),
+            token_mint_key.as_ref(),
             &[bonding_curve.bump]
         ];
         let signer = &[&seeds[..]];
@@ -119,13 +121,15 @@ pub mod bonding_curve_new {
             .checked_mul(amount)
             .ok_or(ErrorCode::Overflow)?;
 
+        // Burn tokens from seller using the token mint in the seeds
+        let token_mint_key = ctx.accounts.token_mint.key();
         let seeds = &[
             b"bonding_curve".as_ref(),
+            token_mint_key.as_ref(),
             &[bonding_curve.bump]
         ];
         let signer = &[&seeds[..]];
 
-        // Burn tokens from seller
         let burn_ctx = CpiContext::new_with_signer(
             ctx.accounts.token_program.to_account_info(),
             Burn {
@@ -158,7 +162,7 @@ pub struct Initialize<'info> {
         init,
         payer = authority,
         space = 8 + 32 + 8 + 8 + 8 + 32 + 1, // discriminator + fields
-        seeds = [b"bonding_curve"],
+        seeds = [b"bonding_curve".as_ref(), token_mint.key().as_ref()],
         bump
     )]
     pub bonding_curve: Account<'info, BondingCurve>,
@@ -174,7 +178,11 @@ pub struct Initialize<'info> {
 
 #[derive(Accounts)]
 pub struct BuyTokens<'info> {
-    #[account(mut, seeds = [b"bonding_curve"], bump = bonding_curve.bump)]
+    #[account(
+        mut, 
+        seeds = [b"bonding_curve".as_ref(), token_mint.key().as_ref()], 
+        bump = bonding_curve.bump
+    )]
     pub bonding_curve: Account<'info, BondingCurve>,
 
     #[account(mut)]
@@ -202,7 +210,11 @@ pub struct BuyTokens<'info> {
 
 #[derive(Accounts)]
 pub struct SellTokens<'info> {
-    #[account(mut, seeds = [b"bonding_curve"], bump = bonding_curve.bump)]
+    #[account(
+        mut, 
+        seeds = [b"bonding_curve".as_ref(), token_mint.key().as_ref()], 
+        bump = bonding_curve.bump
+    )]
     pub bonding_curve: Account<'info, BondingCurve>,
 
     #[account(mut)]
@@ -254,4 +266,4 @@ pub enum ErrorCode {
 
     #[msg("Amount must be greater than 0")]
     InvalidAmount,
-}
+} 
