@@ -26,6 +26,41 @@ pub mod bonding_curve_new {
         bonding_curve.token_mint = ctx.accounts.token_mint.key();
         bonding_curve.bump = ctx.bumps.bonding_curve;
 
+        // Log the parameters
+        msg!("Bonding curve initialized with initial price: {} lamports, slope: {} lamports", 
+            initial_price, slope);
+
+        Ok(())
+    }
+
+    pub fn update_parameters(
+        ctx: Context<UpdateParameters>,
+        initial_price: u64,
+        slope: u64,
+    ) -> Result<()> {
+        if initial_price == 0 || slope == 0 {
+            return Err(ErrorCode::InvalidParameters.into());
+        }
+
+        let bonding_curve = &mut ctx.accounts.bonding_curve;
+
+        // Only the authority can update parameters
+        if bonding_curve.authority != ctx.accounts.authority.key() {
+            return Err(ErrorCode::Unauthorized.into());
+        }
+
+        // Store the old values for logging
+        let old_initial_price = bonding_curve.initial_price;
+        let old_slope = bonding_curve.slope;
+
+        // Update the parameters
+        bonding_curve.initial_price = initial_price;
+        bonding_curve.slope = slope;
+
+        // Log the changes
+        msg!("Bonding curve parameters updated: initial_price {} -> {}, slope {} -> {}", 
+            old_initial_price, initial_price, old_slope, slope);
+
         Ok(())
     }
 
@@ -52,6 +87,10 @@ pub mod bonding_curve_new {
         let cost = current_price
             .checked_mul(amount)
             .ok_or(ErrorCode::Overflow)?;
+
+        // Log the purchase details
+        msg!("Buying {} tokens at {} lamports per token. Total cost: {} lamports", 
+            amount, current_price, cost);
 
         // Transfer SOL from buyer to bonding curve account
         let transfer_ctx = CpiContext::new(
@@ -121,6 +160,10 @@ pub mod bonding_curve_new {
             .checked_mul(amount)
             .ok_or(ErrorCode::Overflow)?;
 
+        // Log the sell details
+        msg!("Selling {} tokens at {} lamports per token. Total refund: {} lamports", 
+            amount, current_price, refund);
+
         // Burn tokens from seller using the token mint in the seeds
         let token_mint_key = ctx.accounts.token_mint.key();
         let seeds = &[
@@ -174,6 +217,24 @@ pub struct Initialize<'info> {
 
     #[account(address = system_program::ID)]
     pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+#[instruction(initial_price: u64, slope: u64)]
+pub struct UpdateParameters<'info> {
+    #[account(
+        mut,
+        seeds = [b"bonding_curve".as_ref(), token_mint.key().as_ref()],
+        bump = bonding_curve.bump
+    )]
+    pub bonding_curve: Account<'info, BondingCurve>,
+
+    #[account(
+        constraint = authority.key() == bonding_curve.authority @ ErrorCode::Unauthorized
+    )]
+    pub authority: Signer<'info>,
+
+    pub token_mint: Account<'info, Mint>,
 }
 
 #[derive(Accounts)]
